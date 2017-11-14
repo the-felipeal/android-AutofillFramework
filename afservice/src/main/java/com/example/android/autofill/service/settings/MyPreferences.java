@@ -90,7 +90,7 @@ public class MyPreferences {
     }
 
     public Util.LogLevel getLoggingLevel() {
-        return Util.LogLevel.values()[mPrefs.getInt(LOGGING_LEVEL, Util.LogLevel.OFF.ordinal())];
+        return Util.LogLevel.values()[mPrefs.getInt(LOGGING_LEVEL, Util.LogLevel.VERBOSE.ordinal())];
     }
 
     public void setLoggingLevel(Util.LogLevel level) {

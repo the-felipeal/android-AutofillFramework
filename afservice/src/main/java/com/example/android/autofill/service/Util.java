@@ -44,7 +44,7 @@ public final class Util {
 
     public enum LogLevel { OFF, DEBUG, VERBOSE }
 
-    public static LogLevel sLoggingLevel = LogLevel.OFF;
+    public static LogLevel sLoggingLevel = LogLevel.VERBOSE;
 
     private static void bundleToString(StringBuilder builder, Bundle data) {
         final Set<String> keySet = data.keySet();

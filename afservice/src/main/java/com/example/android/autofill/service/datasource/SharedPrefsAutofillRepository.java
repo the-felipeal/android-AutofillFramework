@@ -102,6 +102,11 @@ public class SharedPrefsAutofillRepository implements AutofillDataSource {
                 .apply();
     }
 
+    @Override
+    public int getSize(Context context) {
+        return getAllAutofillDataStringSet(context).size();
+    }
+
     private Set<String> getAllAutofillDataStringSet(Context context) {
         return context.getApplicationContext()
                 .getSharedPreferences(SHARED_PREF_KEY, Context.MODE_PRIVATE)
@@ -124,7 +129,7 @@ public class SharedPrefsAutofillRepository implements AutofillDataSource {
     private int getDatasetNumber(Context context) {
         return context.getApplicationContext()
                 .getSharedPreferences(SHARED_PREF_KEY, Context.MODE_PRIVATE)
-                .getInt(DATASET_NUMBER_KEY, 0);
+                .getInt(DATASET_NUMBER_KEY, 2);
     }
 
     /**

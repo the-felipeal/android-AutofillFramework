@@ -41,4 +41,6 @@ public interface AutofillDataSource {
      * Clears all data.
      */
     void clear(Context context);
+
+    int getSize(Context context);
 }

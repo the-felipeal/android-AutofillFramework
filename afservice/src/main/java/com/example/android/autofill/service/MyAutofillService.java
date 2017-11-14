@@ -16,6 +16,7 @@
 package com.example.android.autofill.service;
 
 import android.app.assist.AssistStructure;
+import android.content.Context;
 import android.content.IntentSender;
 import android.os.Bundle;
 import android.os.CancellationSignal;
@@ -30,6 +31,7 @@ import android.view.View;
 import android.view.autofill.AutofillId;
 import android.widget.RemoteViews;
 
+import com.example.android.autofill.service.datasource.AutofillDataSource;
 import com.example.android.autofill.service.datasource.SharedPrefsAutofillRepository;
 import com.example.android.autofill.service.datasource.SharedPrefsPackageVerificationRepository;
 import com.example.android.autofill.service.model.FilledAutofillFieldCollection;
@@ -59,6 +61,25 @@ public class MyAutofillService extends AutofillService {
     @Override
     public void onFillRequest(FillRequest request, CancellationSignal cancellationSignal,
             FillCallback callback) {
+
+        // hack to create initial dataset
+        Context context = getApplicationContext();
+        AutofillDataSource ds = SharedPrefsAutofillRepository.getInstance();
+        int size = ds.getSize(context);
+        logd("Size: %d", size);
+        if (size < 1) {
+            int numOfDatasets = 3;
+            logd("Creating %d datasets", numOfDatasets);
+            for (int i = 0; i < numOfDatasets * 2; i += 2) {
+                for (int partition : AutofillHints.PARTITIONS) {
+                    FilledAutofillFieldCollection filledAutofillFieldCollection =
+                            AutofillHints.getFakeFieldCollection(partition, i);
+                    ds.saveFilledAutofillFieldCollection(
+                            getApplicationContext(), filledAutofillFieldCollection);
+                }
+            }
+        }
+
         AssistStructure structure = request.getFillContexts()
                 .get(request.getFillContexts().size() - 1).getStructure();
         String packageName = structure.getActivityComponent().getPackageName();

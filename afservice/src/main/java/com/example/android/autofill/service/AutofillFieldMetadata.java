@@ -31,12 +31,12 @@ public class AutofillFieldMetadata {
     private CharSequence[] mAutofillOptions;
     private boolean mFocused;
 
-    public AutofillFieldMetadata(ViewNode view) {
+    public AutofillFieldMetadata(ViewNode view, String[] allHints) {
         mAutofillId = view.getAutofillId();
         mAutofillType = view.getAutofillType();
         mAutofillOptions = view.getAutofillOptions();
         mFocused = view.isFocused();
-        String[] hints = AutofillHints.filterForSupportedHints(view.getAutofillHints());
+        String[] hints = AutofillHints.filterForSupportedHints(allHints);
         if (hints != null) {
             AutofillHints.convertToStoredHintNames(hints);
             setHints(hints);

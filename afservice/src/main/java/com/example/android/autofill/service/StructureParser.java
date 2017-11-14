@@ -19,6 +19,9 @@ import android.app.assist.AssistStructure;
 import android.app.assist.AssistStructure.ViewNode;
 import android.app.assist.AssistStructure.WindowNode;
 import android.content.Context;
+import android.util.Pair;
+import android.view.View;
+import android.view.ViewStructure;
 import android.view.autofill.AutofillValue;
 
 import com.example.android.autofill.service.datasource.SharedPrefsDigitalAssetLinksRepository;
@@ -26,6 +29,7 @@ import com.example.android.autofill.service.model.FilledAutofillField;
 import com.example.android.autofill.service.model.FilledAutofillFieldCollection;
 
 import static com.example.android.autofill.service.Util.logd;
+import static com.example.android.autofill.service.Util.logw;
 
 /**
  * Parser for an AssistStructure object. This is invoked when the Autofill Service receives an
@@ -70,10 +74,12 @@ final class StructureParser {
             boolean valid = SharedPrefsDigitalAssetLinksRepository.getInstance().isValid(mContext,
                     webDomain.toString(), packageName);
             if (!valid) {
-                throw new SecurityException(mContext.getString(
-                        R.string.invalid_link_association, webDomain, packageName));
+                logw("Domain %s is NOT valid for %s, but ignoring it", webDomain, packageName);
+//                throw new SecurityException(mContext.getString(
+//                        R.string.invalid_link_association, webDomain, packageName));
+            } else {
+                logd("Domain %s is valid for %s", webDomain, packageName);
             }
-            logd("Domain %s is valid for %s", webDomain, packageName);
         } else {
             logd("no web domain");
         }
@@ -93,12 +99,42 @@ final class StructureParser {
             }
         }
 
-        if (viewNode.getAutofillHints() != null) {
-            String[] filteredHints = AutofillHints.filterForSupportedHints(
-                    viewNode.getAutofillHints());
+        boolean hasAutofillHints = viewNode.getAutofillHints() != null;
+        ViewStructure.HtmlInfo htmlInfo = viewNode.getHtmlInfo();
+        boolean hasHtmlInfo = htmlInfo != null;
+
+
+        if (hasAutofillHints || hasHtmlInfo) {
+            String[] filteredHints = null;
+            if (hasAutofillHints) {
+                filteredHints = AutofillHints.filterForSupportedHints(
+                        viewNode.getAutofillHints());
+            }
+            if (hasHtmlInfo && filteredHints == null) {
+                logd("Scanning HtmlInfo: %s", htmlInfo.getAttributes());
+                for (Pair<String, String> attr : htmlInfo.getAttributes()) {
+                    logd("Scanning attribute %s=%s", attr.first, attr.second);
+                    if ("type".equals(attr.first)) {
+                        switch (attr.second) {
+                            case "email":
+                                logd("Found email");
+                                filteredHints = new String[] {View.AUTOFILL_HINT_EMAIL_ADDRESS};
+                                break;
+                            case "password":
+                                logd("Found password");
+                                filteredHints = new String[] {View.AUTOFILL_HINT_PASSWORD};
+                                break;
+                            default:
+                                logd("Ignoring type '%s'", attr.second);
+                        }
+                    } else {
+                        logd("Ignoring attr " + attr.second);
+                    }
+                }
+            }
             if (filteredHints != null && filteredHints.length > 0) {
                 if (forFill) {
-                    mAutofillFields.add(new AutofillFieldMetadata(viewNode));
+                    mAutofillFields.add(new AutofillFieldMetadata(viewNode, filteredHints));
                 } else {
                     FilledAutofillField filledAutofillField =
                             new FilledAutofillField(viewNode.getAutofillHints());
@@ -117,6 +153,7 @@ final class StructureParser {
                 }
             }
         }
+
         int childrenSize = viewNode.getChildCount();
         if (childrenSize > 0) {
             for (int i = 0; i < childrenSize; i++) {
