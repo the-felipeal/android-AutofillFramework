@@ -22,6 +22,7 @@ import android.content.pm.Signature;
 import android.os.AsyncTask;
 import android.util.Log;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.net.InternetDomainName;
 
 import org.json.JSONObject;
@@ -35,6 +36,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Map;
 
 import static com.example.android.autofill.service.Util.logd;
 import static com.example.android.autofill.service.Util.logv;
@@ -123,7 +125,37 @@ public final class SecurityHelper {
         return idn == null ? null : idn.toString();
     }
 
+    // TODO: use shared preferences for whitelist
+    private static final Map<String, String> mWhitelistedApps = ImmutableMap.of(
+      "org.mozilla.focus","62:03:A4:73:BE:36:D6:4E:E3:7F:87:FA:50:0E:DB:C7:9E:AB:93:06:10:AB:9B:9F:A4:CA:7D:5C:1F:1B:4F:FC",
+      "com.facebook.samples.loginsample",""
+    );
+
+    private static boolean isWhitelisted(String packageName, String fingerprint) {
+        if (!mWhitelistedApps.containsKey(packageName)) return false;
+
+        String expectedFingerprint = mWhitelistedApps.get(packageName);
+        if (expectedFingerprint.isEmpty()) {
+            // Used by apps installed locally, like the Facebook sample app
+            logd("Whitelisting generic package %s", packageName);
+            return true;
+        }
+        if (expectedFingerprint.equals(fingerprint)) {
+            logd("Whitelisting package %s", packageName);
+            return true;
+        } else {
+            logw("Fingerprint mismatch when whitelisting package %s: expected=%s, actual=%s",
+                    packageName, expectedFingerprint, fingerprint);
+            return false;
+        }
+    }
+
+
     public static boolean isValid(String webDomain, String packageName, String fingerprint) {
+        if (isWhitelisted(packageName, fingerprint)) {
+            return true;
+        }
+
         String canonicalDomain = getCanonicalDomain(webDomain);
         logd("validating domain %s (%s) for pkg %s and fingerprint %s.", canonicalDomain,
                 webDomain, packageName, fingerprint);

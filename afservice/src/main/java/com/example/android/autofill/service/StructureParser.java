@@ -70,13 +70,14 @@ final class StructureParser {
             parseLocked(forFill, view, webDomain);
         }
         if (webDomain.length() > 0) {
+            // felipeal: STOPPED HERE - DUDE
             String packageName = mStructure.getActivityComponent().getPackageName();
+            System.out.println("COMP: " + mStructure.getActivityComponent() + " PK: " + mStructure.getActivityComponent().getPackageName());
             boolean valid = SharedPrefsDigitalAssetLinksRepository.getInstance().isValid(mContext,
                     webDomain.toString(), packageName);
             if (!valid) {
-                logw("Domain %s is NOT valid for %s, but ignoring it", webDomain, packageName);
-//                throw new SecurityException(mContext.getString(
-//                        R.string.invalid_link_association, webDomain, packageName));
+                throw new SecurityException(mContext.getString(
+                        R.string.invalid_link_association, webDomain, packageName));
             } else {
                 logd("Domain %s is valid for %s", webDomain, packageName);
             }
@@ -114,8 +115,13 @@ final class StructureParser {
                 logd("Scanning HtmlInfo: %s", htmlInfo.getAttributes());
                 for (Pair<String, String> attr : htmlInfo.getAttributes()) {
                     logd("Scanning attribute %s=%s", attr.first, attr.second);
-                    if ("type".equals(attr.first)) {
+                    if ("type".equals(attr.first) || "name".equals(attr.first)) {
                         switch (attr.second) {
+                            case "username":
+                            case "session[username_or_email]": // Twitter hack
+                                logd("Found username");
+                                filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
+                                break;
                             case "email":
                                 logd("Found email");
                                 filteredHints = new String[] {View.AUTOFILL_HINT_EMAIL_ADDRESS};
@@ -128,7 +134,7 @@ final class StructureParser {
                                 logd("Ignoring type '%s'", attr.second);
                         }
                     } else {
-                        logd("Ignoring attr " + attr.second);
+                        logd("Ignoring attr " + attr.first + "(value=" + attr.second + ")");
                     }
                 }
             }
