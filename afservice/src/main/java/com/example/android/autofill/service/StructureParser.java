@@ -114,8 +114,13 @@ final class StructureParser {
                 logd("Scanning HtmlInfo: %s", htmlInfo.getAttributes());
                 for (Pair<String, String> attr : htmlInfo.getAttributes()) {
                     logd("Scanning attribute %s=%s", attr.first, attr.second);
-                    if ("type".equals(attr.first)) {
+                    if ("type".equals(attr.first) || "name".equals(attr.first)) {
                         switch (attr.second) {
+                            case "username":
+                            case "session[username_or_email]": // Twitter hack
+                                logd("Found username");
+                                filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
+                                break;
                             case "email":
                                 logd("Found email");
                                 filteredHints = new String[] {View.AUTOFILL_HINT_EMAIL_ADDRESS};
@@ -128,7 +133,7 @@ final class StructureParser {
                                 logd("Ignoring type '%s'", attr.second);
                         }
                     } else {
-                        logd("Ignoring attr " + attr.second);
+                        logd("Ignoring attr " + attr.first + "(value=" + attr.second + ")");
                     }
                 }
             }
