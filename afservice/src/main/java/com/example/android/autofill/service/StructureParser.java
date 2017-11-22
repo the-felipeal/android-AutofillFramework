@@ -70,9 +70,7 @@ final class StructureParser {
             parseLocked(forFill, view, webDomain);
         }
         if (webDomain.length() > 0) {
-            // felipeal: STOPPED HERE - DUDE
             String packageName = mStructure.getActivityComponent().getPackageName();
-            System.out.println("COMP: " + mStructure.getActivityComponent() + " PK: " + mStructure.getActivityComponent().getPackageName());
             boolean valid = SharedPrefsDigitalAssetLinksRepository.getInstance().isValid(mContext,
                     webDomain.toString(), packageName);
             if (!valid) {
@@ -103,9 +101,10 @@ final class StructureParser {
         boolean hasAutofillHints = viewNode.getAutofillHints() != null;
         ViewStructure.HtmlInfo htmlInfo = viewNode.getHtmlInfo();
         boolean hasHtmlInfo = htmlInfo != null;
+        String resourceId = viewNode.getIdEntry();
+        boolean hasResourceId = resourceId != null;
 
-
-        if (hasAutofillHints || hasHtmlInfo) {
+        if (hasAutofillHints || hasHtmlInfo || hasResourceId) {
             String[] filteredHints = null;
             if (hasAutofillHints) {
                 filteredHints = AutofillHints.filterForSupportedHints(
@@ -138,6 +137,20 @@ final class StructureParser {
                     }
                 }
             }
+            if (hasResourceId && filteredHints == null) {
+                resourceId = resourceId.toLowerCase();
+                logd("Trying resourceId: %s", resourceId);
+                if (resourceId.contains("username")) {
+                    logd("Found username");
+                    filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
+                } else if (resourceId.contains("password")) {
+                    logd("Found password");
+                    filteredHints = new String[] {View.AUTOFILL_HINT_PASSWORD};
+                } else {
+                    logd("Ignoring resource id");
+                }
+            }
+
             if (filteredHints != null && filteredHints.length > 0) {
                 if (forFill) {
                     mAutofillFields.add(new AutofillFieldMetadata(viewNode, filteredHints));
