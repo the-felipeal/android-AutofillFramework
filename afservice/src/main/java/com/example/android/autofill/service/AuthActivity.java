@@ -26,7 +26,6 @@ import android.service.autofill.FillResponse;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
-import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.autofill.AutofillManager;
@@ -43,8 +42,8 @@ import static android.view.autofill.AutofillManager.EXTRA_ASSIST_STRUCTURE;
 import static android.view.autofill.AutofillManager.EXTRA_AUTHENTICATION_RESULT;
 import static com.example.android.autofill.service.Util.EXTRA_DATASET_NAME;
 import static com.example.android.autofill.service.Util.EXTRA_FOR_RESPONSE;
+import static com.example.android.autofill.service.Util.logv;
 import static com.example.android.autofill.service.Util.logw;
-
 
 /**
  * This Activity controls the UI for logging in to the Autofill service.
@@ -145,10 +144,12 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private void setResponseIntent(FillResponse fillResponse) {
+        logv("Setting response on auth activity: %s", fillResponse);
         mReplyIntent.putExtra(EXTRA_AUTHENTICATION_RESULT, fillResponse);
     }
 
     private void setDatasetIntent(Dataset dataset) {
+        logv("Setting dataset on auth activity: %s", dataset);
         mReplyIntent.putExtra(EXTRA_AUTHENTICATION_RESULT, dataset);
     }
 }
