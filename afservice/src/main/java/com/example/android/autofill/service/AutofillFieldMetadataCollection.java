@@ -71,4 +71,6 @@ public final class AutofillFieldMetadataCollection {
     public List<String> getAllHints() {
         return mAllAutofillHints;
     }
+
+    public boolean isEmpty() { return mSize == 0; };
 }

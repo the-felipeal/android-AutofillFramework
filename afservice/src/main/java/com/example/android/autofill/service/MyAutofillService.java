@@ -26,6 +26,7 @@ import android.service.autofill.FillContext;
 import android.service.autofill.FillRequest;
 import android.service.autofill.FillResponse;
 import android.service.autofill.SaveCallback;
+import android.service.autofill.SaveInfo;
 import android.service.autofill.SaveRequest;
 import android.view.View;
 import android.view.autofill.AutofillId;
@@ -108,6 +109,18 @@ public class MyAutofillService extends AutofillService {
             // to confirm the mapping. Might require subclassing SecurityException.
             logw(e, "Security exception handling %s", request);
             callback.onFailure(e.getMessage());
+            return;
+        }
+        if (parser.shouldGenerateToBeContinuedResponse()) {
+            AutofillId id = parser.getFirstAutofillId();
+            logd("Didn't find any field other than URL; returning fake response "
+                    + "(with id %s) to keep autofill context alive until WebView is loaded", id);
+            callback.onSuccess(new FillResponse.Builder()
+                    // TODO: prior to P, response must have a dataset, a saveinfo, or an auth,
+                    // so we're using a SaveInfo with the id of the root view
+                .setSaveInfo(new SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_GENERIC,
+                        new AutofillId[] {id}).build())
+                    .build());
             return;
         }
         AutofillFieldMetadataCollection autofillFields = parser.getAutofillFields();

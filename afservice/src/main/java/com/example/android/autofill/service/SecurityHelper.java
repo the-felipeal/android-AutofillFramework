@@ -129,6 +129,7 @@ public final class SecurityHelper {
     private static final Map<String, String> mWhitelistedApps = ImmutableMap.of(
       "org.mozilla.focus","62:03:A4:73:BE:36:D6:4E:E3:7F:87:FA:50:0E:DB:C7:9E:AB:93:06:10:AB:9B:9F:A4:CA:7D:5C:1F:1B:4F:FC",
       "com.citi.citimobile", "37:1C:73:36:09:2E:52:98:C9:69:E5:CA:1F:AE:A3:F9:C2:8A:61:A4:32:C4:19:92:0E:F8:0C:44:03:AC:C1:AE",
+      "org.chromium.webview_shell", "",
       "com.facebook.samples.loginsample",""
     );
 

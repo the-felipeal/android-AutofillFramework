@@ -22,6 +22,7 @@ import android.content.Context;
 import android.util.Pair;
 import android.view.View;
 import android.view.ViewStructure;
+import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
 
 import com.example.android.autofill.service.datasource.SharedPrefsDigitalAssetLinksRepository;
@@ -42,6 +43,8 @@ final class StructureParser {
     private final Context mContext;
     private final AssistStructure mStructure;
     private FilledAutofillFieldCollection mFilledAutofillFieldCollection;
+    private boolean mHasUrlField;
+    private AutofillId mFirstAutofillId;
 
     StructureParser(Context context, AssistStructure structure) {
         mContext = context;
@@ -85,6 +88,10 @@ final class StructureParser {
     }
 
     private void parseLocked(boolean forFill, ViewNode viewNode, StringBuilder validWebDomain) {
+        if (mFirstAutofillId == null) {
+            mFirstAutofillId = viewNode.getAutofillId();
+        }
+
         String webDomain = viewNode.getWebDomain();
         if (webDomain != null) {
             logd("child web domain: %s", webDomain);
@@ -140,7 +147,6 @@ final class StructureParser {
             if (hasResourceId && filteredHints == null) {
                 resourceId = resourceId.toLowerCase();
                 logd("Trying resourceId: %s", resourceId);
-                logd("Found username");
                 if (resourceId.contains("username")) {
                     logd("Found username");
                     filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
@@ -149,7 +155,10 @@ final class StructureParser {
                     filteredHints = new String[]{View.AUTOFILL_HINT_EMAIL_ADDRESS};
                 } else if (resourceId.contains("password")) {
                     logd("Found password");
-                    filteredHints = new String[] {View.AUTOFILL_HINT_PASSWORD};
+                    filteredHints = new String[]{View.AUTOFILL_HINT_PASSWORD};
+                } else if (resourceId.contains("url")) {
+                    logd("found url");
+                    mHasUrlField = true;
                 } else {
                     logd("Ignoring resource id");
                 }
@@ -191,5 +200,13 @@ final class StructureParser {
 
     public FilledAutofillFieldCollection getClientFormData() {
         return mFilledAutofillFieldCollection;
+    }
+
+    public boolean shouldGenerateToBeContinuedResponse() {
+        return mHasUrlField && mAutofillFields.isEmpty();
+    }
+
+    public AutofillId getFirstAutofillId() {
+        return mFirstAutofillId;
     }
 }
