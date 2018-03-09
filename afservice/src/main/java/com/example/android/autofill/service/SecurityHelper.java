@@ -124,14 +124,15 @@ public final class SecurityHelper {
         }
         return idn == null ? null : idn.toString();
     }
-
     // TODO: use shared preferences for whitelist
-    private static final Map<String, String> mWhitelistedApps = ImmutableMap.of(
-      "org.mozilla.focus","62:03:A4:73:BE:36:D6:4E:E3:7F:87:FA:50:0E:DB:C7:9E:AB:93:06:10:AB:9B:9F:A4:CA:7D:5C:1F:1B:4F:FC",
-      "com.citi.citimobile", "37:1C:73:36:09:2E:52:98:C9:69:E5:CA:1F:AE:A3:F9:C2:8A:61:A4:32:C4:19:92:0E:F8:0C:44:03:AC:C1:AE",
-      "org.chromium.webview_shell", "",
-      "com.facebook.samples.loginsample",""
-    );
+    private static final Map<String, String> mWhitelistedApps = new ImmutableMap.Builder<String, String>()
+            .put("org.mozilla.focus","62:03:A4:73:BE:36:D6:4E:E3:7F:87:FA:50:0E:DB:C7:9E:AB:93:06:10:AB:9B:9F:A4:CA:7D:5C:1F:1B:4F:FC")
+            .put("com.citi.citimobile", "37:1C:73:36:09:2E:52:98:C9:69:E5:CA:1F:AE:A3:F9:C2:8A:61:A4:32:C4:19:92:0E:F8:0C:44:03:AC:C1:AE")
+            .put("com.pinterest", "34:1D:68:81:B1:EC:F3:83:61:FB:F8:C8:FB:AE:0A:A5:16:B4:53:75:C3:9E:F5:E7:8B:16:18:69:AC:C1:BC:FA")
+            .put("org.chromium.webview_shell", "")
+            .put("com.facebook.samples.loginsample","")
+            .put("com.facebook.samples.fbloginsample","")
+            .build();
 
     private static boolean isWhitelisted(String packageName, String fingerprint) {
         if (!mWhitelistedApps.containsKey(packageName)) return false;
