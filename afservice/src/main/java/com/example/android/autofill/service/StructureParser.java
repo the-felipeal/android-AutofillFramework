@@ -147,7 +147,7 @@ final class StructureParser {
             if (hasResourceId && filteredHints == null) {
                 resourceId = resourceId.toLowerCase();
                 logd("Trying resourceId: %s", resourceId);
-                if (resourceId.contains("username")) {
+                if (resourceId.contains("username") || resourceId.contains("login_identifier")) {
                     logd("Found username");
                     filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
                 } else if (resourceId.contains("email")) {
