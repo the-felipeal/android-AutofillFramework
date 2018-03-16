@@ -28,8 +28,10 @@ import android.service.autofill.SaveCallback;
 import android.service.autofill.SaveInfo;
 import android.service.autofill.SaveRequest;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.util.ArrayMap;
 import android.util.Log;
+import android.view.View;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
 import android.widget.RemoteViews;
@@ -84,7 +86,6 @@ public class BasicService extends AutofillService {
             callback.onSuccess(null);
             return;
         }
-        Log.d(TAG, "autofill hints: " + fields);
 
         // Create the base response
         FillResponse.Builder response = new FillResponse.Builder();
@@ -138,18 +139,31 @@ public class BasicService extends AutofillService {
     // TODO: document
     private void addAutofillableFields(@NonNull Map<String, AutofillId> fields,
             @NonNull ViewNode node) {
-        String[] hints = node.getAutofillHints();
-        if (hints != null) {
-            AutofillId id = node.getAutofillId();
-            // We're simple, we only care about the first hint
-            String hint = hints[0].toLowerCase();
-            Log.v(TAG, "Found hint " + hint + " on " + id);
-            fields.put(hint, id);
+        int type = node.getAutofillType();
+        // We're simple, we just autofill text fields.
+        if (type == View.AUTOFILL_TYPE_TEXT) {
+            String hint = getHint(node);
+            if (hint != null) {
+                AutofillId id = node.getAutofillId();
+                Log.v(TAG, "Found hint " + hint + " on " + id);
+                fields.put(hint, id);
+            }
         }
         int childrenSize = node.getChildCount();
         for (int i = 0; i < childrenSize; i++) {
             addAutofillableFields(fields, node.getChildAt(i));
         }
+    }
+
+    // TODO: document
+    @Nullable
+    protected String getHint(@NonNull ViewNode node) {
+        String[] hints = node.getAutofillHints();
+        if (hints == null) return null;
+
+        // We're simple, we only care about the first hint
+        String hint = hints[0].toLowerCase();
+        return hint;
     }
 
     // TODO: move to common code

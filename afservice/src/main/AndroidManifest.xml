@@ -36,6 +36,16 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".simple.BasicHeuristicsService"
+            android:label="Basic Heuristics Autofill Service"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
         <activity android:name=".AuthActivity" />
         <!-- Including launcher icon for Autofill Settings to convenience. Not necessary for a
         real service. -->
