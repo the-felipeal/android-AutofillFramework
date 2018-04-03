@@ -129,6 +129,7 @@ public final class SecurityHelper {
             .put("org.mozilla.focus","62:03:A4:73:BE:36:D6:4E:E3:7F:87:FA:50:0E:DB:C7:9E:AB:93:06:10:AB:9B:9F:A4:CA:7D:5C:1F:1B:4F:FC")
             .put("com.citi.citimobile", "37:1C:73:36:09:2E:52:98:C9:69:E5:CA:1F:AE:A3:F9:C2:8A:61:A4:32:C4:19:92:0E:F8:0C:44:03:AC:C1:AE")
             .put("com.pinterest", "34:1D:68:81:B1:EC:F3:83:61:FB:F8:C8:FB:AE:0A:A5:16:B4:53:75:C3:9E:F5:E7:8B:16:18:69:AC:C1:BC:FA")
+            .put("com.chrome.beta", "DA:63:3D:34:B6:9E:63:AE:21:03:B4:9D:53:CE:05:2F:C5:F7:F3:C5:3A:AB:94:FD:C2:A2:08:BD:FD:14:24:9C")
             .put("org.chromium.webview_shell", "")
             .put("com.facebook.samples.loginsample","")
             .put("com.facebook.samples.fbloginsample","")

@@ -15,6 +15,11 @@
  */
 package com.example.android.autofill.service;
 
+import static com.example.android.autofill.service.Util.logDebugEnabled;
+import static com.example.android.autofill.service.Util.logd;
+import static com.example.android.autofill.service.Util.logv;
+import static com.example.android.autofill.service.Util.logw;
+
 import android.app.assist.AssistStructure;
 import android.app.assist.AssistStructure.ViewNode;
 import android.app.assist.AssistStructure.WindowNode;
@@ -28,9 +33,12 @@ import android.view.autofill.AutofillValue;
 import com.example.android.autofill.service.datasource.SharedPrefsDigitalAssetLinksRepository;
 import com.example.android.autofill.service.model.FilledAutofillField;
 import com.example.android.autofill.service.model.FilledAutofillFieldCollection;
+import com.google.common.collect.ImmutableSet;
 
-import static com.example.android.autofill.service.Util.logd;
-import static com.example.android.autofill.service.Util.logw;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Parser for an AssistStructure object. This is invoked when the Autofill Service receives an
@@ -45,6 +53,10 @@ final class StructureParser {
     private FilledAutofillFieldCollection mFilledAutofillFieldCollection;
     private boolean mHasUrlField;
     private AutofillId mFirstAutofillId;
+
+    private static final Set<String> COMPAT_MODE_PACKAGES = ImmutableSet.of(
+            "com.chrome.beta",
+            "com.android.chrome");
 
     StructureParser(Context context, AssistStructure structure) {
         mContext = context;
@@ -64,16 +76,18 @@ final class StructureParser {
      */
     private void parse(boolean forFill) {
         logd("Parsing structure for %s", mStructure.getActivityComponent());
+        String packageName = mStructure.getActivityComponent().getPackageName();
+        boolean compatMode = COMPAT_MODE_PACKAGES.contains(packageName);
+        logd("Compat mode: " + compatMode);
         int nodes = mStructure.getWindowNodeCount();
         mFilledAutofillFieldCollection = new FilledAutofillFieldCollection();
         StringBuilder webDomain = new StringBuilder();
         for (int i = 0; i < nodes; i++) {
             WindowNode node = mStructure.getWindowNodeAt(i);
             ViewNode view = node.getRootViewNode();
-            parseLocked(forFill, view, webDomain);
+            parseLocked(forFill, view, webDomain, compatMode);
         }
         if (webDomain.length() > 0) {
-            String packageName = mStructure.getActivityComponent().getPackageName();
             boolean valid = SharedPrefsDigitalAssetLinksRepository.getInstance().isValid(mContext,
                     webDomain.toString(), packageName);
             if (!valid) {
@@ -87,12 +101,143 @@ final class StructureParser {
         }
     }
 
-    private void parseLocked(boolean forFill, ViewNode viewNode, StringBuilder validWebDomain) {
-        if (mFirstAutofillId == null) {
-            mFirstAutofillId = viewNode.getAutofillId();
+    enum CompatModeParseState {
+        WAITING_USERNAME_LABEL,
+        WAITING_USERNAME_FIELD,
+        WAITING_PASSWORD_LABEL,
+        WAITING_PASSWORD_FIELD,
+        DONE
+    }
+
+    private CompatModeParseState mParseState = CompatModeParseState.WAITING_USERNAME_LABEL;
+
+    private void parseLocked(boolean forFill, ViewNode viewNode, StringBuilder validWebDomain,
+            boolean compatMode) {
+
+        String[] filteredHints = null;
+        String webDomain = null;
+
+        if (compatMode) {
+            final List<String> hints = new ArrayList<>();
+            String className = viewNode.getClassName();
+            String text = viewNode.getText() == null ? null
+                    : viewNode.getText().toString().toLowerCase();
+
+            webDomain = viewNode.getWebDomain();
+            if (webDomain != null) {
+                logd("Found webdomain: %s", webDomain);
+            }
+            logv("Text: %s: State: %s WebDomain: %s", text, mParseState, webDomain);
+            if (text != null) {
+                switch (mParseState) {
+                    case WAITING_USERNAME_LABEL:
+                        if (text.contains("username") || text.contains("email")) {
+                            logd("Found username label: %s", text);
+                            mParseState = CompatModeParseState.WAITING_USERNAME_FIELD;
+                        }
+                        break;
+                    case WAITING_USERNAME_FIELD:
+                        if ("android.widget.EditText".equals(className)) {
+                            // Don't log text because it could contain PII
+                            logd("Found username field: %d chars", text.length());
+                            mParseState = CompatModeParseState.WAITING_PASSWORD_LABEL;
+                            hints.add(View.AUTOFILL_HINT_USERNAME);
+                        }
+                        break;
+                    case WAITING_PASSWORD_LABEL:
+                        if (text.contains("password")) {
+                            logd("Found password label: %s", text);
+                            mParseState = CompatModeParseState.WAITING_PASSWORD_FIELD;
+                        }
+                        break;
+                    case WAITING_PASSWORD_FIELD:
+                        if ("android.widget.EditText".equals(className)) {
+                            // Don't log text because it could contain PII
+                            logd("Found password field: %d chars", text.length());
+                            mParseState = CompatModeParseState.DONE;
+                            hints.add(View.AUTOFILL_HINT_PASSWORD);
+                        }
+                        break;
+                    case DONE:
+                        // ignore
+                        break;
+                    default:
+                        logw("Invalid parsing state: %s", mParseState);
+                }
+            }
+
+            logd("compat mode \"hints\": %s", hints);
+            if (!hints.isEmpty()) {
+                filteredHints = new String[hints.size()];
+                hints.toArray(filteredHints);
+            }
+        } else {
+            webDomain = viewNode.getWebDomain();
+            if (mFirstAutofillId == null) {
+                mFirstAutofillId = viewNode.getAutofillId();
+            }
+
+            boolean hasAutofillHints = viewNode.getAutofillHints() != null;
+            ViewStructure.HtmlInfo htmlInfo = viewNode.getHtmlInfo();
+            boolean hasHtmlInfo = htmlInfo != null;
+            String resourceId = viewNode.getIdEntry();
+            boolean hasResourceId = resourceId != null;
+
+            if (hasAutofillHints || hasHtmlInfo || hasResourceId) {
+                if (hasAutofillHints) {
+                    filteredHints = AutofillHints.filterForSupportedHints(
+                            viewNode.getAutofillHints());
+                }
+                if (hasHtmlInfo && filteredHints == null) {
+                    logd("Scanning HtmlInfo: %s", htmlInfo.getAttributes());
+                    for (Pair<String, String> attr : htmlInfo.getAttributes()) {
+                        logd("Scanning attribute %s=%s", attr.first, attr.second);
+                        if ("type".equals(attr.first) || "name".equals(attr.first)) {
+                            switch (attr.second) {
+                                case "username":
+                                case "session[username_or_email]": // Twitter hack
+                                    logd("Found username");
+                                    filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
+                                    break;
+                                case "email":
+                                    logd("Found email");
+                                    filteredHints = new String[] {View.AUTOFILL_HINT_EMAIL_ADDRESS};
+                                    break;
+                                case "password":
+                                    logd("Found password");
+                                    filteredHints = new String[] {View.AUTOFILL_HINT_PASSWORD};
+                                    break;
+                                default:
+                                    logd("Ignoring type '%s'", attr.second);
+                            }
+                        } else {
+                            logd("Ignoring attr " + attr.first + "(value=" + attr.second + ")");
+                        }
+                    }
+                }
+                if (hasResourceId && filteredHints == null) {
+                    resourceId = resourceId.toLowerCase();
+                    logd("Trying resourceId: %s", resourceId);
+                    if (resourceId.contains("username") || resourceId.contains("login_identifier")) {
+                        logd("Found username");
+                        filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
+                    } else if (resourceId.contains("email")) {
+                        logd("Found email");
+                        filteredHints = new String[]{View.AUTOFILL_HINT_EMAIL_ADDRESS};
+                    } else if (resourceId.contains("password")) {
+                        logd("Found password");
+                        filteredHints = new String[]{View.AUTOFILL_HINT_PASSWORD};
+                    } else if (resourceId.contains("url")) {
+                        logd("found url");
+                        mHasUrlField = true;
+                    } else {
+                        logd("Ignoring resource id");
+                    }
+                }
+            }
+
         }
 
-        String webDomain = viewNode.getWebDomain();
         if (webDomain != null) {
             logd("child web domain: %s", webDomain);
             if (validWebDomain.length() > 0) {
@@ -105,91 +250,32 @@ final class StructureParser {
             }
         }
 
-        boolean hasAutofillHints = viewNode.getAutofillHints() != null;
-        ViewStructure.HtmlInfo htmlInfo = viewNode.getHtmlInfo();
-        boolean hasHtmlInfo = htmlInfo != null;
-        String resourceId = viewNode.getIdEntry();
-        boolean hasResourceId = resourceId != null;
-
-        if (hasAutofillHints || hasHtmlInfo || hasResourceId) {
-            String[] filteredHints = null;
-            if (hasAutofillHints) {
-                filteredHints = AutofillHints.filterForSupportedHints(
-                        viewNode.getAutofillHints());
-            }
-            if (hasHtmlInfo && filteredHints == null) {
-                logd("Scanning HtmlInfo: %s", htmlInfo.getAttributes());
-                for (Pair<String, String> attr : htmlInfo.getAttributes()) {
-                    logd("Scanning attribute %s=%s", attr.first, attr.second);
-                    if ("type".equals(attr.first) || "name".equals(attr.first)) {
-                        switch (attr.second) {
-                            case "username":
-                            case "session[username_or_email]": // Twitter hack
-                                logd("Found username");
-                                filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
-                                break;
-                            case "email":
-                                logd("Found email");
-                                filteredHints = new String[] {View.AUTOFILL_HINT_EMAIL_ADDRESS};
-                                break;
-                            case "password":
-                                logd("Found password");
-                                filteredHints = new String[] {View.AUTOFILL_HINT_PASSWORD};
-                                break;
-                            default:
-                                logd("Ignoring type '%s'", attr.second);
-                        }
-                    } else {
-                        logd("Ignoring attr " + attr.first + "(value=" + attr.second + ")");
-                    }
+        if (filteredHints != null && filteredHints.length > 0) {
+            if (forFill) {
+                mAutofillFields.add(new AutofillFieldMetadata(viewNode, filteredHints));
+            } else {
+                FilledAutofillField filledAutofillField =
+                        new FilledAutofillField(viewNode.getAutofillHints());
+                AutofillValue autofillValue = viewNode.getAutofillValue();
+                if (autofillValue.isText()) {
+                    // Using toString of AutofillValue.getTextValue in order to save it to
+                    // SharedPreferences.
+                    filledAutofillField.setTextValue(autofillValue.getTextValue().toString());
+                } else if (autofillValue.isDate()) {
+                    filledAutofillField.setDateValue(autofillValue.getDateValue());
+                } else if (autofillValue.isList()) {
+                    filledAutofillField.setListValue(viewNode.getAutofillOptions(),
+                            autofillValue.getListValue());
                 }
-            }
-            if (hasResourceId && filteredHints == null) {
-                resourceId = resourceId.toLowerCase();
-                logd("Trying resourceId: %s", resourceId);
-                if (resourceId.contains("username") || resourceId.contains("login_identifier")) {
-                    logd("Found username");
-                    filteredHints = new String[] {View.AUTOFILL_HINT_USERNAME};
-                } else if (resourceId.contains("email")) {
-                    logd("Found email");
-                    filteredHints = new String[]{View.AUTOFILL_HINT_EMAIL_ADDRESS};
-                } else if (resourceId.contains("password")) {
-                    logd("Found password");
-                    filteredHints = new String[]{View.AUTOFILL_HINT_PASSWORD};
-                } else if (resourceId.contains("url")) {
-                    logd("found url");
-                    mHasUrlField = true;
-                } else {
-                    logd("Ignoring resource id");
-                }
-            }
-
-            if (filteredHints != null && filteredHints.length > 0) {
-                if (forFill) {
-                    mAutofillFields.add(new AutofillFieldMetadata(viewNode, filteredHints));
-                } else {
-                    FilledAutofillField filledAutofillField =
-                            new FilledAutofillField(viewNode.getAutofillHints());
-                    AutofillValue autofillValue = viewNode.getAutofillValue();
-                    if (autofillValue.isText()) {
-                        // Using toString of AutofillValue.getTextValue in order to save it to
-                        // SharedPreferences.
-                        filledAutofillField.setTextValue(autofillValue.getTextValue().toString());
-                    } else if (autofillValue.isDate()) {
-                        filledAutofillField.setDateValue(autofillValue.getDateValue());
-                    } else if (autofillValue.isList()) {
-                        filledAutofillField.setListValue(viewNode.getAutofillOptions(),
-                                autofillValue.getListValue());
-                    }
-                    mFilledAutofillFieldCollection.add(filledAutofillField);
-                }
+                mFilledAutofillFieldCollection.add(filledAutofillField);
             }
         }
+
 
         int childrenSize = viewNode.getChildCount();
         if (childrenSize > 0) {
             for (int i = 0; i < childrenSize; i++) {
-                parseLocked(forFill, viewNode.getChildAt(i), validWebDomain);
+                parseLocked(forFill, viewNode.getChildAt(i), validWebDomain, compatMode);
             }
         }
     }
