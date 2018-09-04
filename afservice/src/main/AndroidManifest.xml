@@ -47,9 +47,50 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".simple.BasicHeuristicsServiceAuto"
+            android:label="Automatic Heuristics Autofill Service"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/basic_heuristics_service"/>
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".simple.BasicHeuristicsServiceWithDatasetAuth"
+            android:label="Dataset Auth Service"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/basic_heuristics_service"/>
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".simple.BasicHeuristicsServiceWithResponseAuth"
+            android:label="Response Auth Service"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/basic_heuristics_service"/>
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".AuthActivity"
             android:taskAffinity=".AuthActivity"
+            android:label="@string/authentication_name" />
+
+        <activity
+            android:name=".simple.SimpleAuthActivity"
+            android:taskAffinity=".simple.SimpleAuthActivity"
             android:label="@string/authentication_name" />
 
         <activity

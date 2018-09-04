@@ -17,9 +17,13 @@ package com.example.android.autofill.service.simple;
 
 import android.app.assist.AssistStructure;
 import android.app.assist.AssistStructure.ViewNode;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentSender;
 import android.os.CancellationSignal;
 import android.service.autofill.AutofillService;
 import android.service.autofill.Dataset;
+import android.service.autofill.Dataset.Builder;
 import android.service.autofill.FillCallback;
 import android.service.autofill.FillContext;
 import android.service.autofill.FillRequest;
@@ -29,9 +33,8 @@ import android.service.autofill.SaveInfo;
 import android.service.autofill.SaveRequest;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.util.ArrayMap;
+import android.util.ArrayMap;
 import android.util.Log;
-import android.view.View;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
 import android.widget.RemoteViews;
@@ -61,7 +64,19 @@ public class BasicService extends AutofillService {
     /**
      * Number of datasets sent on each request - we're simple, that value is hardcoded in our DNA!
      */
-    private static final int NUMBER_DATASETS = 4;
+    static final int NUMBER_DATASETS = 4;
+
+    private final boolean mAuthenticateDatasets;
+    private final boolean mAuthenticateResponses;
+
+    public BasicService() {
+        this(false, false);
+    }
+
+    protected BasicService(boolean authenticateDatasets, boolean authenticateResponses) {
+        mAuthenticateDatasets = authenticateDatasets;
+        mAuthenticateResponses = authenticateResponses;
+    }
 
     @Override
     public void onFillRequest(FillRequest request, CancellationSignal cancellationSignal,
@@ -70,34 +85,67 @@ public class BasicService extends AutofillService {
 
         // Find autofillable fields
         AssistStructure structure = getLatestAssistStructure(request);
-        Map<String, AutofillId> fields = getAutofillableFields(structure);
+
+        ArrayMap<String, AutofillId> fields = getAutofillableFields(structure, request.getFlags());
         Log.d(TAG, "autofillable fields:" + fields);
 
         if (fields.isEmpty()) {
-            toast("No autofill hints found");
+            showMessage("Service could not figure out how to autofill this screen");
             callback.onSuccess(null);
             return;
         }
 
-        // Create the base response
-        FillResponse.Builder response = new FillResponse.Builder();
-
-        // 1.Add the dynamic datasets
-        String packageName = getApplicationContext().getPackageName();
-        for (int i = 1; i <= NUMBER_DATASETS; i++) {
-            Dataset.Builder dataset = new Dataset.Builder();
-            for (Entry<String, AutofillId> field : fields.entrySet()) {
-                String hint = field.getKey();
-                AutofillId id = field.getValue();
-                String value = hint + i;
-                // We're simple - our dataset values are hardcoded as "hintN" (for example,
-                // "username1", "username2") and they're displayed as such, except if they're a
-                // password
-                String displayValue = hint.contains("password") ? "password for #" + i : value;
-                RemoteViews presentation = newDatasetPresentation(packageName, displayValue);
-                dataset.setValue(id, AutofillValue.forText(value), presentation);
+        if (mAuthenticateResponses) {
+            int size = fields.size();
+            String[] hints = new String[size];
+            AutofillId[] ids = new AutofillId[size];
+            for (int i = 0; i < size; i++) {
+                hints[i] = fields.keyAt(i);
+                ids[i] = fields.valueAt(i);
             }
-            response.addDataset(dataset.build());
+
+            IntentSender authentication =
+                    SimpleAuthActivity.newIntentSenderForResponse(this, hints, ids);
+            RemoteViews presentation = newDatasetPresentation(getPackageName(),
+                        "Tap to auth response");
+
+            FillResponse response = new FillResponse.Builder()
+                    .setAuthentication(ids, authentication, presentation).build();
+            callback.onSuccess(response);
+            return;
+        }
+
+        // Create the base response
+        FillResponse response = createResponse(this, fields, NUMBER_DATASETS,
+                mAuthenticateDatasets);
+        callback.onSuccess(response);
+    }
+
+    static FillResponse createResponse(@NonNull Context context,
+            @NonNull ArrayMap<String, AutofillId> fields, int numDatasets,
+            boolean authenticateDatasets) {
+        String packageName = context.getPackageName();
+        FillResponse.Builder response = new FillResponse.Builder();
+        // 1.Add the dynamic datasets
+        for (int i = 1; i <= numDatasets; i++) {
+            Dataset unlockedDataset = newUnlockedDataset(fields, packageName, i);
+            if (authenticateDatasets) {
+                Dataset.Builder lockedDataset = new Dataset.Builder();
+                for (Entry<String, AutofillId> field : fields.entrySet()) {
+                    String hint = field.getKey();
+                    AutofillId id = field.getValue();
+                    String value = hint + i;
+                    IntentSender authentication =
+                            SimpleAuthActivity.newIntentSenderForDataset(context, unlockedDataset);
+                    RemoteViews presentation = newDatasetPresentation(packageName,
+                            "Tap to auth " + value);
+                    lockedDataset.setValue(id, null, presentation)
+                            .setAuthentication(authentication);
+                }
+                response.addDataset(lockedDataset.build());
+            } else {
+                response.addDataset(unlockedDataset);
+            }
         }
 
         // 2.Add save info
@@ -109,13 +157,32 @@ public class BasicService extends AutofillService {
                 new SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_GENERIC, requiredIds).build());
 
         // 3.Profit!
-        callback.onSuccess(response.build());
+        return response.build();
+    }
+
+    static Dataset newUnlockedDataset(@NonNull Map<String, AutofillId> fields,
+            @NonNull String packageName, int i) {
+        Dataset.Builder dataset = new Dataset.Builder();
+        for (Entry<String, AutofillId> field : fields.entrySet()) {
+            String hint = field.getKey();
+            AutofillId id = field.getValue();
+            String value = hint + i;
+
+            // We're simple - our dataset values are hardcoded as "hintN" (for example,
+            // "username1", "username2") and they're displayed as such, except if they're a
+            // password
+            String displayValue = hint.contains("password") ? "password for #" + i : value;
+            RemoteViews presentation = newDatasetPresentation(packageName, displayValue);
+            dataset.setValue(id, AutofillValue.forText(value), presentation);
+        }
+
+        return dataset.build();
     }
 
     @Override
     public void onSaveRequest(SaveRequest request, SaveCallback callback) {
         Log.d(TAG, "onSaveRequest()");
-        toast("Save not supported");
+        showMessage("Save not supported");
         callback.onSuccess();
     }
 
@@ -127,12 +194,13 @@ public class BasicService extends AutofillService {
      * <p>An autofillable field is a {@link ViewNode} whose {@link #getHint(ViewNode)} metho
      */
     @NonNull
-    private Map<String, AutofillId> getAutofillableFields(@NonNull AssistStructure structure) {
-        Map<String, AutofillId> fields = new ArrayMap<>();
+    private ArrayMap<String, AutofillId> getAutofillableFields(@NonNull AssistStructure structure,
+            int flags) {
+        ArrayMap<String, AutofillId> fields = new ArrayMap<>();
         int nodes = structure.getWindowNodeCount();
         for (int i = 0; i < nodes; i++) {
             ViewNode node = structure.getWindowNodeAt(i).getRootViewNode();
-            addAutofillableFields(fields, node);
+            addAutofillableFields(fields, node, flags);
         }
         return fields;
     }
@@ -141,25 +209,22 @@ public class BasicService extends AutofillService {
      * Adds any autofillable view from the {@link ViewNode} and its descendants to the map.
      */
     private void addAutofillableFields(@NonNull Map<String, AutofillId> fields,
-            @NonNull ViewNode node) {
+            @NonNull ViewNode node, int flags) {
         int type = node.getAutofillType();
-        // We're simple, we just autofill text fields.
-        if (type == View.AUTOFILL_TYPE_TEXT) {
-            String hint = getHint(node);
-            if (hint != null) {
-                AutofillId id = node.getAutofillId();
-                if (!fields.containsKey(hint)) {
-                    Log.v(TAG, "Setting hint " + hint + " on " + id);
-                    fields.put(hint, id);
-                } else {
-                    Log.v(TAG, "Ignoring hint " + hint + " on " + id
-                            + " because it was already set");
-                }
+        String hint = getHint(node, flags);
+        if (hint != null) {
+            AutofillId id = node.getAutofillId();
+            if (!fields.containsKey(hint)) {
+                Log.v(TAG, "Setting hint " + hint + " on " + id);
+                fields.put(hint, id);
+            } else {
+                Log.v(TAG, "Ignoring hint " + hint + " on " + id
+                        + " because it was already set");
             }
         }
         int childrenSize = node.getChildCount();
         for (int i = 0; i < childrenSize; i++) {
-            addAutofillableFields(fields, node.getChildAt(i));
+            addAutofillableFields(fields, node.getChildAt(i), flags);
         }
     }
 
@@ -172,7 +237,7 @@ public class BasicService extends AutofillService {
      *
      */
     @Nullable
-    protected String getHint(@NonNull ViewNode node) {
+    protected String getHint(@NonNull ViewNode node, int flags) {
         String[] hints = node.getAutofillHints();
         if (hints == null) return null;
 
@@ -207,7 +272,8 @@ public class BasicService extends AutofillService {
     /**
      * Displays a toast with the given message.
      */
-    private void toast(@NonNull CharSequence message) {
+    private void showMessage(@NonNull CharSequence message) {
+        Log.i(TAG, message.toString());
         Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show();
     }
 }

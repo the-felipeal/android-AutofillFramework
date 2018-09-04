@@ -16,6 +16,7 @@
 package com.example.android.autofill.service.simple;
 
 import android.app.assist.AssistStructure.ViewNode;
+import android.service.autofill.FillRequest;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
@@ -37,14 +38,33 @@ public class BasicHeuristicsService extends BasicService {
 
     private static final String TAG = "BasicHeuristicsService";
 
+    private final boolean mUsesHeuristicsOnManualRequestOnly;
+
+    public BasicHeuristicsService() {
+        super();
+        mUsesHeuristicsOnManualRequestOnly = true;
+    }
+
+    protected BasicHeuristicsService(boolean usesHeuristicsOnManualRequestOnly,
+            boolean authenticateDatasets, boolean authenticateResponses) {
+        super(authenticateDatasets, authenticateResponses);
+        mUsesHeuristicsOnManualRequestOnly = usesHeuristicsOnManualRequestOnly;
+    }
+
     @Override
     @Nullable
-    protected String getHint(@NonNull ViewNode node) {
+    protected String getHint(@NonNull ViewNode node, int flags) {
 
         // First try the explicit autofill hints...
 
-        String hint = super.getHint(node);
+        String hint = super.getHint(node, flags);
         if (hint != null) return hint;
+
+        // Then check if it's a manual request
+        if (mUsesHeuristicsOnManualRequestOnly && (flags & FillRequest.FLAG_MANUAL_REQUEST) == 0) {
+            Log.d(TAG, "not applying heuristics because it's an automatic request");
+            return null;
+        }
 
         // Then try some rudimentary heuristics based on other node properties
 
@@ -92,24 +112,25 @@ public class BasicHeuristicsService extends BasicService {
         if (string == null) return null;
 
         string = string.toLowerCase();
-        if (string.contains("password")) return View.AUTOFILL_HINT_PASSWORD;
+        if (string.contains("label")) {
+            Log.v(TAG, "Ignroing 'label' hint: " + string);
+            return null;
+        }
+        if (string.contains("password")
+                || string.contains("passcode") // BofA
+                ) return View.AUTOFILL_HINT_PASSWORD;
         if (string.contains("username")
-                || (string.contains("login") && string.contains("id")))
+                || (string.contains("login") && string.contains("id"))
+                || (string.contains("signin") && string.contains("id"))// BofA
+                )
             return View.AUTOFILL_HINT_USERNAME;
         if (string.contains("email")) return View.AUTOFILL_HINT_EMAIL_ADDRESS;
         if (string.contains("name")) return View.AUTOFILL_HINT_NAME;
         if (string.contains("phone")) return View.AUTOFILL_HINT_PHONE;
-        if (string.contains("address")) {
-            if (string.contains("1")) return "address-line1"; // W3C spec
-            if (string.contains("2")) return "address-line2"; // W3C spec
-            if (string.contains("3")) return "address-line3"; // W3C spec
-            return View.AUTOFILL_HINT_POSTAL_ADDRESS;
-        }
-        if (string.contains("zip")) return View.AUTOFILL_HINT_POSTAL_CODE;
-        if (string.contains("city")) return "address-level-2"; // W3C spec
-        if (string.contains("state") || string.contains("province") || string.contains("region"))
-            return "address-level-3"; // W3C spec
-        if (string.contains("country")) return "country"; // W3C spec
+        if (string.contains("search")) return "search"; // AGSA
+        if (string.contains("entry")) return "entry"; // WhatsApp
+        if (string.contains("chat")) return "chat"; // Kakao
+        if (string.contains("caption")) return "caption"; // Instagram
 
         return null;
     }
